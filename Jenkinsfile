@@ -66,11 +66,15 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        // 1) TMDB API KEY GOES HERE
-                        sh "docker build --build-arg TMDB_V3_API_KEY=75729bd5a677c0750d99b578d52f66c1 -t netflix ."
-
-                        sh "docker tag netflix ibrahimbiabani/netflix:latest"
-                        sh "docker push ibrahimbiabani/netflix:latest"
+                        dir('app') {
+                            // build image from app/ where the Dockerfile lives
+                            sh """
+                              docker build \
+                                --build-arg TMDB_V3_API_KEY=75729bd5a677c0750d99b578d52f66c1 \
+                                -t ibrahimbiabani/netflix:latest .
+                            """
+                            sh "docker push ibrahimbiabani/netflix:latest"
+                        }
                     }
                 }
             }
@@ -84,6 +88,8 @@ pipeline {
 
         stage('Deploy to container') {
             steps {
+                // stop/remove old container if it exists so reruns don’t fail
+                sh "docker rm -f netflix || true"
                 sh "docker run -d --name netflix -p 8081:80 ibrahimbiabani/netflix:latest"
             }
         }

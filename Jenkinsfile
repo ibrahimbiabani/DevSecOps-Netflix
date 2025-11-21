@@ -25,7 +25,6 @@ pipeline {
 
         stage('Sonarqube Analysis') {
             steps {
-                // Change the server name here if you used a different one in Jenkins
                 withSonarQubeEnv('sonarqube-server') {
                     sh '''$SCANNER_HOME/bin/sonar-scanner \
 -Dsonar.projectName=Netflix \
@@ -44,7 +43,6 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // If your package.json is in /app (it is in this repo), keep this dir()
                 dir('app') {
                     sh "npm install"
                 }
@@ -71,7 +69,6 @@ pipeline {
                         // 1) TMDB API KEY GOES HERE
                         sh "docker build --build-arg TMDB_V3_API_KEY=75729bd5a677c0750d99b578d52f66c1 -t netflix ."
 
-                        // 2) YOUR DOCKERHUB USERNAME GOES HERE
                         sh "docker tag netflix ibrahimbiabani/netflix:latest"
                         sh "docker push ibrahimbiabani/netflix:latest"
                     }
@@ -81,15 +78,12 @@ pipeline {
 
         stage('TRIVY IMAGE SCAN') {
             steps {
-                // 3) SAME DOCKERHUB USERNAME HERE
                 sh "trivy image ibrahimbiabani/netflix:latest > trivyimage.txt"
             }
         }
 
         stage('Deploy to container') {
             steps {
-                // This will fail if a container named 'netflix' already exists.
-                // Stop/remove it manually before first run if needed.
                 sh "docker run -d --name netflix -p 8081:80 ibrahimbiabani/netflix:latest"
             }
         }

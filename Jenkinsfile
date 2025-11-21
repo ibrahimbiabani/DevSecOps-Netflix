@@ -2,132 +2,96 @@ pipeline {
     agent any
 
     tools {
-        jdk 'JDK-17'
-        nodejs 'node-16'
+        jdk 'jdk17'
+        nodejs 'node16'
     }
 
     environment {
-        SONAR_SCANNER = tool 'Sonar-scanner'
-        SONAR_IP = credentials('SQ_PUB_IP')
-        SONAR_LOGIN = credentials('SQ_LOGIN')
-        DOCKER_CRD = credentials('DOCKER_CRD')
-        API = credentials('TMDB_API')
-        GITHUB_EMAIL = credentials('GITHUB_E')
-        GITHUB = credentials('GITHUB') 
+        SCANNER_HOME = tool 'sonar-scanner'
     }
 
     stages {
         stage('clean workspace') {
             steps {
-                cleanWs() 
+                cleanWs()
             }
         }
 
-        stage('Checkout from git') {
+        stage('Checkout from Git') {
             steps {
-                git branch: 'main', url: 'https://github.com/chahid001/Netflix-Clone-DevSecOps.git'
+                git branch: 'main', url: 'https://github.com/ibrahimbiabani/DevSecOps-Netflix.git'
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Sonarqube Analysis') {
             steps {
-                dir('app') {
-                    withSonarQubeEnv('SonarQube-server') {
-                        sh '$SONAR_SCANNER/bin/sonar-scanner \
-                            -Dsonar.projectKey=Netflix-clone \
-                            -Dsonar.sources=. \
-                            -Dsonar.host.url=$SONAR_IP \
-                            -Dsonar.login=$SONAR_LOGIN'
-                    }
-                   
+                // Change the server name here if you used a different one in Jenkins
+                withSonarQubeEnv('sonarqube-server') {
+                    sh '''$SCANNER_HOME/bin/sonar-scanner \
+-Dsonar.projectName=Netflix \
+-Dsonar.projectKey=Netflix'''
                 }
             }
         }
 
-        stage('Quality gate') {
-            steps { //Stop the pipeline and check if SonarQube analysis and check quality gate status
+        stage('quality gate') {
+            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'SonarQube-token'
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
             }
         }
 
         stage('Install Dependencies') {
             steps {
+                // If your package.json is in /app (it is in this repo), keep this dir()
                 dir('app') {
-                    sh 'npm install'
+                    sh "npm install"
                 }
             }
         }
 
-        stage('OWASP Dependencies Scan') { //Scan 
+        stage('OWASP FS SCAN') {
             steps {
-                dir('app') {
-                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+
+        stage('TRIVY FS SCAN') {
+            steps {
+                sh "trivy fs . > trivyfs.txt"
+            }
+        }
+
+        stage('Docker Build & Push') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        // 1) TMDB API KEY GOES HERE
+                        sh "docker build --build-arg TMDB_V3_API_KEY=75729bd5a677c0750d99b578d52f66c1 -t netflix ."
+
+                        // 2) YOUR DOCKERHUB USERNAME GOES HERE
+                        sh "docker tag netflix ibrahimbiabani/netflix:latest"
+                        sh "docker push ibrahimbiabani/netflix:latest"
+                    }
                 }
             }
         }
 
-        stage('Trivy Scan') {
+        stage('TRIVY IMAGE SCAN') {
             steps {
-                dir('app') {
-                    sh 'trivy fs . > trivy_scan.txt'
-                }
+                // 3) SAME DOCKERHUB USERNAME HERE
+                sh "trivy image ibrahimbiabani/netflix:latest > trivyimage.txt"
             }
         }
 
-        stage('Docker Build') {
+        stage('Deploy to container') {
             steps {
-                dir('app') {
-                    sh 'docker build --build-arg TMDB_V3_API_KEY=$API -t $DOCKER_CRD_USR/netflix-clone:v$BUILD_NUMBER .'
-                }
+                // This will fail if a container named 'netflix' already exists.
+                // Stop/remove it manually before first run if needed.
+                sh "docker run -d --name netflix -p 8081:80 ibrahimbiabani/netflix:latest"
             }
-        }
-
-        stage('Docker Push') {
-            steps {
-                dir('app') {
-                    sh 'docker login -u $DOCKER_CRD_USR -p $DOCKER_CRD_PSW'
-                    sh 'docker push $DOCKER_CRD_USR/netflix-clone:v$BUILD_NUMBER'
-                }
-            }
-        }
-
-        stage('Trivy Image Scan') {
-            steps {
-                sh 'trivy image $DOCKER_CRD_USR/netflix-clone:$BUILD_NUMBER > trivy_image_scan.txt'
-            }
-        }
-
-        stage('Change build number') {
-            steps {
-                dir("Kubernetes/manifests") {
-                    sh 'sed -i -e "s/:v[^ ]*/:v$BUILD_NUMBER/" netflix.deployement.yaml'
-                }
-            }
-        }
-
-        stage('Git push changes') {
-            steps {
-                sh 'git config user.email $GITHUB_EMAIL'
-                sh 'git config user.name $GITHUB_USR'
-                sh 'git add Kubernetes/manifests/netflix.deployement.yaml'
-                sh 'git commit -m $BUILD_NUMBER'
-                sh 'git push https://$GITHUB_USR:$GITHUB_PSW@github.com/$GITHUB_USR/IoT-test.git'
-            }
-        }
-
-    }
-    post {
-        always {
-            emailext attachLog: true,
-                subject: "'${currentBuild.result}'",
-                body: "Project: ${env.JOB_NAME}<br/>" +
-                    "Build Number: ${env.BUILD_NUMBER}<br/>" +
-                    "URL: ${env.BUILD_URL}<br/>",
-                to: 'soufianeel288@gmail.com',
-                attachmentsPattern: 'trivy_scan.txt,trivy_image_scan.txt'
         }
     }
 }

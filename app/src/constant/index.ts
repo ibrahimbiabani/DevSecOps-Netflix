@@ -12,8 +12,8 @@ export const MAIN_PATH = {
 
 export const ARROW_MAX_WIDTH = 60;
 export const COMMON_TITLES: CustomGenre[] = [
-  { name: "Popular", apiString: "popular" },
-  { name: "Top Rated", apiString: "top_rated" },
+  { name: "22i-0928", apiString: "popular" },
+  { name: "DevSecOps", apiString: "top_rated" },
   { name: "Now Playing", apiString: "now_playing" },
   { name: "Upcoming", apiString: "upcoming" },
 ];

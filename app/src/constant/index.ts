@@ -14,8 +14,8 @@ export const ARROW_MAX_WIDTH = 60;
 export const COMMON_TITLES: CustomGenre[] = [
   { name: "22i-0928", apiString: "popular" },
   { name: "DevSecOps", apiString: "top_rated" },
-  { name: "Now Playing", apiString: "now_playing" },
-  { name: "Upcoming", apiString: "upcoming" },
+  { name: "22i-1177", apiString: "now_playing" },
+  { name: "Trailer", apiString: "upcoming" },
 ];
 
 export const YOUTUBE_URL = "https://www.youtube.com/watch?v=";
